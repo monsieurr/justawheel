@@ -1,4 +1,4 @@
-  ⭕ Itsjustawheel
+  ⭕ justawheel
 
     Digital utility meets analog satisfaction.
     A tactile, minimalist productivity suite built around a physics-based rotary input.
