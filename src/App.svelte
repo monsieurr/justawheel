@@ -68,17 +68,36 @@
 <style>
   :global(body) {
     margin: 0;
+    padding: 0;
     background-color: #1a1a1a;
     color: rgba(255, 255, 255, 0.87);
     font-family: Inter, system-ui, sans-serif;
     overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overscroll-behavior: none;
+  }
+  
+  :global(html) {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
   }
   
   .app-shell {
     height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile */
+    width: 100vw;
+    max-width: 100vw;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    overflow: hidden;
+    position: relative;
   }
   
   .content {
@@ -87,13 +106,18 @@
     justify-content: center;
     align-items: center;
     width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+    position: relative;
   }
   
   .feature-wrapper {
     width: 100%;
+    max-width: 100vw;
     display: flex;
     justify-content: center;
     align-items: center;
+    overflow: hidden;
   }
   
   .dock {
