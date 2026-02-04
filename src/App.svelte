@@ -78,18 +78,15 @@
   :global(html) {
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
   }
   
   .app-shell {
     min-height: 100vh;
     min-height: 100dvh;
     width: 100%;
-    max-width: 100vw;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    overflow-x: hidden;
   }
   
   .content {
@@ -98,8 +95,6 @@
     justify-content: center;
     align-items: center;
     width: 100%;
-    max-width: 100vw;
-    overflow: hidden;
     position: relative;
   }
   

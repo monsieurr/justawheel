@@ -18,7 +18,6 @@
       margin: 0;
       padding: 0;
       width: 100%;
-      overflow-x: hidden;
     }
     
     /* Mobile-specific fixes */
@@ -27,7 +26,10 @@
         position: fixed;
         height: 100%;
         overscroll-behavior: none;
-        touch-action: pan-y;
+      }
+      
+      body {
+        overflow: hidden;
       }
     }
     
