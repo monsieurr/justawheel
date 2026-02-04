@@ -1,84 +1,86 @@
 <!-- src/App.svelte -->
 <script>
-import RotaryWheel from './lib/Components/RotaryWheel.svelte'; 
   import Timer from './lib/Components/Timer.svelte';
   import ColorPicker from './lib/Components/ColorPicker.svelte';
   import Clock from './lib/Components/Clock.svelte';
   import Tasks from './lib/Components/TaskOrb.svelte';
   import Contrast from './lib/Components/Contrast.svelte';
-
+  import SoundWheel from './lib/Components/SoundWheel.svelte';
+  import { initAudio } from './lib/audio';
+  import { onMount } from 'svelte';
   
-  // 0=Orbit, 1=Timer, 2=Color, 3=Clock, 4=Contrast
+  // 0=Timer, 1=Color, 2=Clock, 3=Contrast, 4=Tasks, 5=Sound
   let activeTab = 0;
+  
+  // Initialize audio on first user interaction
+  onMount(() => {
+    const handleFirstInteraction = () => {
+      initAudio();
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+    
+    document.addEventListener('click', handleFirstInteraction);
+    document.addEventListener('touchstart', handleFirstInteraction);
+  });
 </script>
 
 <main class="app-shell">
   
   <div class="content">
     {#if activeTab === 0}
-      <!-- TIMER COMPONENT -->
       <div class="feature-wrapper">
         <Timer />
       </div>
-
     {:else if activeTab === 1}
-      <!-- COLOR -->
       <div class="feature-wrapper">
         <ColorPicker />
       </div>
-
     {:else if activeTab === 2}
-      <!-- CLOCK -->
       <div class="feature-wrapper">
         <Clock />
       </div>
-
     {:else if activeTab === 3}
-      <div class="feature-wrapper"><Clock /></div>
-
-    {:else if activeTab === 4}
-      <!-- CONTRAST CHECKER -->
       <div class="feature-wrapper">
         <Contrast />
       </div>
-
-      {:else if activeTab === 5}
-      <!-- TODO -->
+    {:else if activeTab === 4}
       <div class="feature-wrapper">
         <Tasks />
       </div>
+    {:else if activeTab === 5}
+      <div class="feature-wrapper">
+        <SoundWheel />
+      </div>
     {/if}
-
-
   </div>
-
+  
   <nav class="dock">
     <button class:active={activeTab === 0} on:click={() => activeTab = 0}>Timer</button>
     <button class:active={activeTab === 1} on:click={() => activeTab = 1}>Color</button>
     <button class:active={activeTab === 2} on:click={() => activeTab = 2}>Clock</button>
-    <button class:active={activeTab === 4} on:click={() => activeTab = 4}>Contrast</button>
-    <button class:active={activeTab === 5} on:click={() => activeTab = 5}>Tasks</button>
+    <button class:active={activeTab === 3} on:click={() => activeTab = 3}>Contrast</button>
+    <button class:active={activeTab === 4} on:click={() => activeTab = 4}>Tasks</button>
+    <button class:active={activeTab === 5} on:click={() => activeTab = 5}>Sound</button>
   </nav>
-
 </main>
-
 
 <style>
   :global(body) {
     margin: 0;
-    background-color: #1a1a1a; /* Darker background */
+    background-color: #1a1a1a;
     color: rgba(255, 255, 255, 0.87);
     font-family: Inter, system-ui, sans-serif;
-    overflow: hidden; /* Prevent scroll on mobile */
+    overflow: hidden;
   }
-
+  
   .app-shell {
     height: 100vh;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
   }
-
+  
   .content {
     flex-grow: 1;
     display: flex;
@@ -86,22 +88,14 @@ import RotaryWheel from './lib/Components/RotaryWheel.svelte';
     align-items: center;
     width: 100%;
   }
-
-  .display h1 {
-    font-size: 4rem;
-    margin: 0;
-    font-weight: 200;
-    font-variant-numeric: tabular-nums; 
+  
+  .feature-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
-
-  .display p {
-    margin: 0;
-    font-size: 0.8rem;
-    letter-spacing: 2px;
-    opacity: 0.5;
-  }
-
-  /* DOCK STYLES (Apple-like bottom bar) */
+  
   .dock {
     margin: 0 auto 20px auto;
     background: rgba(40, 40, 40, 0.8);
@@ -112,8 +106,15 @@ import RotaryWheel from './lib/Components/RotaryWheel.svelte';
     gap: 5px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     z-index: 100;
+    max-width: 90vw;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
-
+  
+  .dock::-webkit-scrollbar {
+    display: none;
+  }
+  
   .dock button {
     background: transparent;
     border: none;
@@ -123,12 +124,20 @@ import RotaryWheel from './lib/Components/RotaryWheel.svelte';
     cursor: pointer;
     border-radius: 20px;
     transition: all 0.3s ease;
+    white-space: nowrap;
   }
-
+  
   .dock button.active {
     background: rgba(255,255,255,0.1);
     color: white;
     font-weight: 500;
     box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  }
+  
+  @media (max-width: 768px) {
+    .dock button {
+      padding: 8px 16px;
+      font-size: 0.8rem;
+    }
   }
 </style>

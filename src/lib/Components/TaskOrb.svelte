@@ -6,24 +6,22 @@
     import { elasticOut, cubicOut } from 'svelte/easing';
     import { playClick } from '../audio';
 
-    // --- STATE ---
     let tasks = [];
     let focusedIndex = 0;
     let fallenOrbs = []; 
     
-    // Modes: 'VIEW', 'INPUT', 'MENU'
     let mode = 'VIEW'; 
     let newTaskText = '';
     let inputRef;
 
-    // Radial Menu State
     let isHolding = false;
     let showMenu = false;
     let holdTimer = null;
-    let menuSelection = null; // 'ADD', 'CLEAR', null
-    let menuAngle = 0; // For visual feedback
+    let menuSelection = null;
+    let menuAngle = 0;
+    
+    let feedbackMsg = '';
 
-    // --- PERSISTENCE & INIT ---
     onMount(() => {
         const savedTasks = localStorage.getItem('zen-tasks-v3');
         const savedOrbs = localStorage.getItem('zen-orbs-v3');
@@ -31,10 +29,9 @@
         if (savedTasks) {
             tasks = JSON.parse(savedTasks);
         } else {
-            // Default tasks with pre-assigned colors
             tasks = [
                 { id: 1, text: 'Hold to open menu', color: '#FF5722' },
-                { id: 2, text: 'Slide UP to Add', color: '#00BCD4' },
+                { id: 2, text: 'Slide to Add/Copy', color: '#00BCD4' },
                 { id: 3, text: 'Tap to Complete', color: '#8BC34A' }
             ];
         }
@@ -49,30 +46,67 @@
         }
     }
 
-    // --- COLOR GENERATOR ---
-    // Generates a consistent nice color based on randomness
     function getRandomColor() {
-        const hues = [0, 25, 45, 160, 190, 210, 260, 320]; // Zen Palette
+        const hues = [0, 25, 45, 160, 190, 210, 260, 320];
         const hue = hues[Math.floor(Math.random() * hues.length)];
         return `hsl(${hue}, 75%, 60%)`;
     }
 
-    // --- WHEEL NAVIGATION ---
+    async function copyAsMarkdown() {
+        if (tasks.length === 0) return;
+        
+        const markdown = tasks.map(task => `- [ ] ${task.text}`).join('\n');
+        
+        try {
+            await navigator.clipboard.writeText(markdown);
+            showFeedback('COPIED AS MARKDOWN');
+        } catch (err) {
+            console.error('Failed to copy', err);
+            showFeedback('COPY FAILED');
+        }
+    }
+    
+    function exportData() {
+        const data = {
+            tasks: tasks,
+            completedOrbs: fallenOrbs,
+            exportDate: new Date().toISOString()
+        };
+        
+        const jsonStr = JSON.stringify(data, null, 2);
+        downloadFile(jsonStr, 'zen-tasks-export.json', 'application/json');
+        showFeedback('EXPORTED');
+    }
+    
+    function downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+    
+    function showFeedback(msg) {
+        feedbackMsg = msg;
+        setTimeout(() => feedbackMsg = '', 2000);
+    }
+
     function handleRotate(event) {
-        if (mode === 'INPUT' || isHolding) return; // Lock wheel when typing or using menu
+        if (mode === 'INPUT' || isHolding) return;
         if (tasks.length === 0) return;
 
         const direction = event.detail.direction;
         let newIndex = focusedIndex + direction;
         
-        // Wrap logic
         if (newIndex >= tasks.length) newIndex = 0;
         if (newIndex < 0) newIndex = tasks.length - 1;
         
         focusedIndex = newIndex;
     }
-
-    // --- RADIAL MENU LOGIC (Weapon Wheel) ---
 
     function startHold(e) {
         if (mode === 'INPUT') return;
@@ -80,13 +114,11 @@
         isHolding = true;
         menuSelection = null;
 
-        // Wait 300ms to trigger menu. If released before, it's a click.
         holdTimer = setTimeout(() => {
             showMenu = true;
-            if (navigator.vibrate) navigator.vibrate(20); // Haptic feedback
+            if (navigator.vibrate) navigator.vibrate(20);
         }, 300);
 
-        // Add global listeners to track drag even outside the button
         window.addEventListener('mousemove', handleDrag);
         window.addEventListener('touchmove', handleDrag, { passive: false });
         window.addEventListener('mouseup', endHold);
@@ -95,33 +127,28 @@
 
     function handleDrag(e) {
         if (!showMenu) return;
-        e.preventDefault(); // Stop scrolling
+        e.preventDefault();
 
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-        // Calculate angle relative to center of screen (simple approximation)
-        // Ideally we use the button rect, but center of screen is usually safe for this layout
         const rect = document.querySelector('.task-stage')?.getBoundingClientRect();
         if (!rect) return;
         
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
         
-        // Atan2 returns -PI to PI. -PI/2 is UP.
         const angle = Math.atan2(clientY - centerY, clientX - centerX);
-        menuAngle = angle * (180 / Math.PI); // Degrees
-
-        // Logic for selection zones
-        // UP (-90deg +/- 45) -> ADD
-        // DOWN (90deg +/- 45) -> CLEAR
+        menuAngle = angle * (180 / Math.PI);
         
         if (menuAngle > -135 && menuAngle < -45) {
             menuSelection = 'ADD';
+        } else if (menuAngle > -45 && menuAngle < 45) {
+            menuSelection = 'COPY';
         } else if (menuAngle > 45 && menuAngle < 135) {
             menuSelection = 'CLEAR';
         } else {
-            menuSelection = null;
+            menuSelection = 'EXPORT';
         }
     }
 
@@ -135,12 +162,9 @@
         isHolding = false;
 
         if (showMenu) {
-            // -- MENU ACTION --
             executeRadialAction();
-            showMenu = false; // Close menu
+            showMenu = false;
         } else {
-            // -- CLICK ACTION (Completed Task) --
-            // Only if we didn't drag/hold long enough
             completeTask();
         }
     }
@@ -150,16 +174,17 @@
             mode = 'INPUT';
             setTimeout(() => inputRef?.focus(), 50);
         } else if (menuSelection === 'CLEAR') {
-            // Clear orbs
             if (fallenOrbs.length > 0) {
                 fallenOrbs = [];
                 playClick();
                 if (navigator.vibrate) navigator.vibrate([30, 30, 30]);
             }
+        } else if (menuSelection === 'COPY') {
+            copyAsMarkdown();
+        } else if (menuSelection === 'EXPORT') {
+            exportData();
         }
     }
-
-    // --- TASK LOGIC ---
 
     function completeTask() {
         if (tasks.length === 0 || mode === 'INPUT') return;
@@ -167,21 +192,18 @@
         playClick();
         const taskToComplete = tasks[focusedIndex];
 
-        // 1. Add to pile (Visual Physics)
         const randomX = Math.random() * 60 - 30; 
         const newOrb = {
             id: Date.now(),
             left: 50 + randomX,
-            color: taskToComplete.color || '#fff' // Use the task's specific color
+            color: taskToComplete.color || '#fff'
         };
         fallenOrbs = [...fallenOrbs, newOrb];
 
-        // 2. Remove from list
         const oldTasks = [...tasks];
         oldTasks.splice(focusedIndex, 1);
         tasks = oldTasks;
 
-        // Reset Index
         if (focusedIndex >= tasks.length) focusedIndex = Math.max(0, tasks.length - 1);
     }
 
@@ -194,7 +216,7 @@
         const newTask = {
             id: Date.now(),
             text: newTaskText,
-            color: getRandomColor() // Assign color on creation
+            color: getRandomColor()
         };
 
         tasks = [...tasks, newTask];
@@ -207,9 +229,14 @@
 
 <div class="orb-system">
     
+    {#if feedbackMsg}
+        <div class="feedback-toast" transition:fade>
+            {feedbackMsg}
+        </div>
+    {/if}
+    
     <RotaryWheel on:rotate={handleRotate}>
         
-        <!-- LAYER 0: The Gravity Well (Orbs) -->
         <div class="gravity-well">
             {#each fallenOrbs as orb (orb.id)}
                 <div 
@@ -220,20 +247,17 @@
             {/each}
         </div>
 
-        <!-- LAYER 1: The Interactive Stage -->
         <button 
             class="task-stage" 
             class:holding={showMenu}
             on:mousedown={startHold}
             on:touchstart|nonpassive={startHold}
         >
-            <!-- A. VIEW MODE -->
             {#if mode === 'VIEW'}
                 {#if tasks.length > 0}
                     {#key tasks[focusedIndex].id}
                         <div class="task-content" in:fly={{ y: 20, duration: 200 }} out:fade>
                             
-                            <!-- The Color Indicator -->
                             <div 
                                 class="task-dot" 
                                 style="background-color: {tasks[focusedIndex].color}; box-shadow: 0 0 15px {tasks[focusedIndex].color};"
@@ -251,7 +275,6 @@
                     </div>
                 {/if}
             
-            <!-- B. INPUT MODE -->
             {:else if mode === 'INPUT'}
                 <form on:submit|preventDefault={submitNewTask} class="input-form" in:scale>
                     <input 
@@ -264,20 +287,27 @@
                 </form>
             {/if}
 
-            <!-- C. RADIAL MENU OVERLAY (Visible on Hold) -->
             {#if showMenu}
                 <div class="radial-overlay" transition:scale={{duration: 200, easing: cubicOut}}>
                     
-                    <!-- TOP SECTOR: ADD -->
                     <div class="sector sector-top" class:active={menuSelection === 'ADD'}>
                         <span class="icon">+</span>
-                        <span class="label">ADD TASK</span>
+                        <span class="label">ADD</span>
                     </div>
 
-                    <!-- BOTTOM SECTOR: CLEAR -->
+                    <div class="sector sector-right" class:active={menuSelection === 'COPY'}>
+                        <span class="icon">MD</span>
+                        <span class="label">COPY</span>
+                    </div>
+
                     <div class="sector sector-bottom" class:active={menuSelection === 'CLEAR'}>
                         <span class="icon">×</span>
-                        <span class="label">CLEAR ORBS</span>
+                        <span class="label">CLEAR</span>
+                    </div>
+                    
+                    <div class="sector sector-left" class:active={menuSelection === 'EXPORT'}>
+                        <span class="icon">JSON</span>
+                        <span class="label">EXPORT</span>
                     </div>
 
                 </div>
@@ -295,6 +325,21 @@
         flex-direction: column;
         align-items: center;
         gap: 20px;
+        position: relative;
+    }
+    
+    .feedback-toast {
+        position: absolute;
+        top: -60px;
+        background: rgba(255, 62, 0, 0.9);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 2px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        z-index: 1000;
     }
 
     .gravity-well {
@@ -311,7 +356,7 @@
     }
 
     .task-stage {
-        pointer-events: auto; /* Vital for clicks */
+        pointer-events: auto;
         z-index: 10;
         background: none; border: none;
         width: 240px; height: 240px;
@@ -320,12 +365,10 @@
         color: white; cursor: pointer;
         outline: none;
         transition: transform 0.2s;
-        /* Prevent text selection during hold */
         user-select: none; 
         -webkit-user-select: none;
     }
 
-    /* Shrink slightly when holding to indicate pressure */
     .task-stage.holding {
         transform: scale(0.95);
     }
@@ -348,7 +391,6 @@
 
     .empty-state { opacity: 0.5; display: flex; flex-direction: column; align-items: center; gap: 5px; }
 
-    /* --- INPUT --- */
     .input-form input {
         background: transparent; border: none; border-bottom: 2px solid #ff3e00;
         color: white; text-align: center; font-size: 1.3rem; padding: 5px;
@@ -356,64 +398,87 @@
     }
     .hidden-submit { display: none; }
 
-    /* --- RADIAL MENU --- */
     .radial-overlay {
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         border-radius: 50%;
-        /* Ensure nothing spills out of the circle */
         overflow: hidden; 
         background: rgba(0,0,0,0.6); 
         backdrop-filter: blur(5px);
-        display: flex; flex-direction: column; justify-content: space-between;
+        display: flex;
+        flex-direction: column;
         align-items: center;
-        /* Remove padding to let sectors touch edges */
+        justify-content: space-between;
         padding: 0; 
         box-sizing: border-box;
     }
 
     .sector {
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        width: 100%; 
-        /* Fill exactly half the circle height */
-        height: 50%; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: center;
         transition: all 0.2s ease;
         opacity: 0.5;
-        gap: 10px;
+        gap: 6px;
+        width: 100%;
+        height: 50%;
+        position: relative;
     }
 
     .sector.active {
         opacity: 1;
-        /* Remove scale to prevent boxiness, we use color instead */
         background: rgba(255, 255, 255, 0.05); 
         text-shadow: 0 0 10px rgba(255,255,255,0.8);
     }
 
-    /* TOP SECTOR: Rounded Top */
     .sector-top {
-        border-top-left-radius: 150px;
-        border-top-right-radius: 150px;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
+        border-top-left-radius: 120px;
+        border-top-right-radius: 120px;
+        padding-bottom: 20px;
     }
     
-    /* REPLACED THE ORANGE BORDER WITH A GRADIENT GLOW */
     .sector-top.active {
         background: radial-gradient(circle at top, rgba(255,62,0,0.4), transparent 70%);
-        color: white;
     }
 
-    /* BOTTOM SECTOR: Rounded Bottom */
+    .sector-right {
+        position: absolute;
+        right: 0;
+        top: 50%;
+        width: 50%;
+        height: 50%;
+        border-bottom-right-radius: 120px;
+        padding-left: 15px;
+    }
+    
+    .sector-right.active {
+        background: radial-gradient(circle at right, rgba(0,188,212,0.4), transparent 70%);
+    }
+
     .sector-bottom {
-        border-bottom-left-radius: 150px;
-        border-bottom-right-radius: 150px;
-        border-top: 1px solid rgba(255,255,255,0.1);
+        border-bottom-left-radius: 120px;
+        border-bottom-right-radius: 120px;
+        padding-top: 20px;
     }
 
     .sector-bottom.active {
         background: radial-gradient(circle at bottom, rgba(255,62,0,0.4), transparent 70%);
-        color: white;
+    }
+    
+    .sector-left {
+        position: absolute;
+        left: 0;
+        top: 50%;
+        width: 50%;
+        height: 50%;
+        border-bottom-left-radius: 120px;
+        padding-right: 15px;
+    }
+    
+    .sector-left.active {
+        background: radial-gradient(circle at left, rgba(76,175,80,0.4), transparent 70%);
     }
 
-    .icon { font-size: 2rem; font-weight: 200; line-height: 1; }
-    .label { font-size: 0.6rem; letter-spacing: 2px; font-weight: 700; }
-
+    .icon { font-size: 1.8rem; line-height: 1; font-weight: 300; }
+    .label { font-size: 0.6rem; letter-spacing: 1.5px; font-weight: 600; }
 </style>

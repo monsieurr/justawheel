@@ -2,48 +2,39 @@
 <script>
     import { onDestroy } from 'svelte';
     import RotaryWheel from './RotaryWheel.svelte';
-    import { playClick } from '../audio'; // Re-using audio for alarm
+    import { playClick } from '../audio';
 
-    // State
-    let duration = 0; // Total seconds
-    let remaining = 0; // Seconds left
-    let status = 'IDLE'; // 'IDLE', 'RUNNING', 'PAUSED', 'DONE'
+    let duration = 0;
+    let remaining = 0;
+    let status = 'IDLE';
     let interval;
     
-    // Click handling helpers
+    let trailSegments = [];
     let clickTimer = null;
+    let wheelRotation = 0; // Track wheel position independently
 
-    // Formatting MM:SS
     $: minutes = Math.floor(remaining / 60).toString().padStart(2, '0');
     $: seconds = (remaining % 60).toString().padStart(2, '0');
 
-    // The Wheel Logic
     function handleRotate(event) {
-        // Only allow changing time if not running
         if (status === 'RUNNING') return;
         
-        // 1 tick = 10 seconds change
         const change = event.detail.direction * 10;
-        
         let newDuration = duration + change;
         if (newDuration < 0) newDuration = 0;
         
         duration = newDuration;
         remaining = newDuration;
         
-        // If we were done or paused, rotating resets to idle state with new time
         if (status === 'DONE' || status === 'PAUSED') status = 'IDLE';
     }
 
-    // Interaction Logic (1 click = Start/Pause, 2 click = Reset)
     function handleInteraction() {
         if (clickTimer) {
-            // DOUBLE CLICK DETECTED
             clearTimeout(clickTimer);
             clickTimer = null;
             handleReset();
         } else {
-            // Wait 250ms to see if it's a double click
             clickTimer = setTimeout(() => {
                 toggleTimer();
                 clickTimer = null;
@@ -52,29 +43,44 @@
     }
 
     function toggleTimer() {
-        if (duration === 0) return; // Can't start 0
+        if (duration === 0) return;
 
         if (status === 'IDLE' || status === 'PAUSED') {
             startCountdown();
         } else if (status === 'RUNNING') {
             pauseCountdown();
         } else if (status === 'DONE') {
-            status = 'IDLE'; // Dismiss alarm
+            status = 'IDLE';
         }
     }
 
     function handleReset() {
         pauseCountdown();
         status = 'IDLE';
-        remaining = duration; // Reset to the last set time (useful for pomodoro)
-        // If you prefer clearing to 0 completely, use: duration = 0; remaining = 0;
+        remaining = duration;
+        trailSegments = [];
     }
 
     function startCountdown() {
         status = 'RUNNING';
         clearInterval(interval);
+        
         interval = setInterval(() => {
             if (remaining > 0) {
+                // Calculate how much to rotate (360deg / total seconds)
+                const degreesPerSecond = duration > 0 ? 360 / duration : 0;
+                wheelRotation += degreesPerSecond;
+                
+                // Add trail at current position
+                trailSegments = [...trailSegments, {
+                    angle: wheelRotation,
+                    id: Date.now() + Math.random()
+                }];
+                
+                if (trailSegments.length > 100) {
+                    trailSegments = trailSegments.slice(-100);
+                }
+                
                 remaining--;
             } else {
                 finishCountdown();
@@ -90,7 +96,8 @@
     function finishCountdown() {
         status = 'DONE';
         clearInterval(interval);
-        // Little alarm burst
+        trailSegments = [];
+        
         let alarmCount = 0;
         const alarmInterval = setInterval(() => {
             playClick();
@@ -105,7 +112,13 @@
 </script>
 
 <div class="timer-wrapper">
-    <RotaryWheel on:rotate={handleRotate}>
+    <RotaryWheel 
+        on:rotate={handleRotate} 
+        locked={status === 'RUNNING'}
+        rotation={status === 'RUNNING' ? wheelRotation : null}
+        showTrail={status === 'RUNNING'}
+        trailSegments={trailSegments}
+    >
         <button class="timer-face" on:click={handleInteraction}>
             
             <div class="time-display" class:blink={status === 'PAUSED'} class:alert={status === 'DONE'}>
@@ -129,8 +142,12 @@
 </div>
 
 <style>
+    .timer-wrapper {
+        position: relative;
+    }
+
     .timer-face {
-        pointer-events: auto; /* <--- ADD THIS LINE */
+        pointer-events: auto;
         background: none;
         border: none;
         cursor: pointer;
@@ -149,14 +166,13 @@
         transition: color 0.3s;
     }
 
-    /* Visual Feedback States */
     .time-display.blink {
         animation: blinker 1s linear infinite;
         opacity: 0.7;
     }
 
     .time-display.alert {
-        color: #ff3e00; /* Svelte Orange Alert */
+        color: #ff3e00;
         animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
     }
 
