@@ -11,7 +11,7 @@
 
 ![alt text](https://img.shields.io/badge/license-MIT-blue.svg)
 
-Zen Wheel is a Progressive Web App (PWA) that reimagines standard digital tools (Timer, Todo, Clock) through a unique User Experience inspired by the iPod Click Wheel, analog synthesizers, and planetary orbits.
+Justawheel is a Progressive Web App (PWA) that reimagines standard digital tools (Timer, Todo, Clock) through a unique User Experience inspired by the iPod Click Wheel, analog synthesizers, and planetary orbits.
 
 There are no buttons to click, only a wheel to spin.
 ✨ Features
@@ -81,8 +81,8 @@ Installation
     Clone the repository:
     code Bash
 
-    git clone https://github.com/yourusername/zen-wheel.git
-    cd zen-wheel
+    git clone https://github.com/yourusername/justawheel.git
+    cd justawheel
 
     Install dependencies:
     code Bash
